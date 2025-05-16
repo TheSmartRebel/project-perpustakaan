@@ -323,83 +323,161 @@ if (isset($_GET['id_buku'])) {
             </div>
         </section><!-- End Portfolio Section -->
 
-        <!-- Tempat Komentar untuk Buku -->
-        <section id="tempat-komentar" class="testimonials">
-            <div class="container" data-aos="fade-up">
-                <header class="section-header text-center">
-                    <h2>Comments on this Ebook</h2>
-                    <p>Reader Testimonials on This ebook</p>
-                </header>
-                <div class="testimonials-slider swiper" data-aos="fade-up" data-aos-delay="200">
-                    <div class="swiper-wrapper">
-                        <!-- Tempat untuk menampilkan komentar -->
-                        <?php
-                        // Periksa apakah ID buku ada dan valid
-                        if (isset($_GET['id_buku']) && is_numeric($_GET['id_buku'])) {
-                            $id_buku = $_GET['id_buku'];
+        <!-- Tampilan Koment -->
+        <?php
+        function tampilkanKomentar($koneksi, $id_buku, $parent_id = null) {
+            $sql = "SELECT k.*, p.nama_pengguna, p.profile
+                    FROM komentar k
+                    JOIN pengguna p ON k.id_pengguna = p.id_pengguna
+                    WHERE k.id_buku = $id_buku AND k.parent_id " . (is_null($parent_id) ? 'IS NULL' : "= $parent_id") . "
+                    ORDER BY k.tanggal_komentar ASC";
 
-                            // Lakukan query untuk mengambil ulasan dan rating dari tabel komentar
-                            $query_komentar = "SELECT komentar.*, pengguna.nama_pengguna, pengguna.profile 
-                    FROM komentar
-                    INNER JOIN pengguna ON komentar.id_pengguna = pengguna.id_pengguna
-                    WHERE komentar.id_buku = $id_buku";
-                            $result_komentar = mysqli_query($koneksi, $query_komentar);
+            $result = mysqli_query($koneksi, $sql);
 
-                            // Periksa apakah query berhasil dieksekusi
-                            if ($result_komentar && mysqli_num_rows($result_komentar) > 0) {
-                                // Loop untuk menampilkan setiap ulasan
-                                while ($row_komentar = mysqli_fetch_assoc($result_komentar)) {
-                                    // Sanitisasi data sebelum ditampilkan
-                                    $id_komentar = htmlspecialchars($row_komentar["id_komentar"]);
-                                    $nama_pengguna = htmlspecialchars($row_komentar["nama_pengguna"]);
-                                    $isi_komentar = htmlspecialchars($row_komentar["isi_komentar"]);
-                                    $tanggal_komentar = htmlspecialchars($row_komentar["tanggal_komentar"]);
-                                    $profile_image = htmlspecialchars($row_komentar["profile"]);
+            while ($row = mysqli_fetch_assoc($result)) {
+                $id = $row['id_komentar'];
+                $nama = htmlspecialchars($row['nama_pengguna']);
+                $foto = htmlspecialchars($row['profile']);
+                $isi = nl2br(htmlspecialchars($row['isi_komentar']));
+                $tanggal = date("d M, Y", strtotime($row['tanggal_komentar']));
 
-                                    echo '<div class="swiper-slide">
-                <div class="testimonial-item">
-                    <div class="text-center">
-                        <img src="../assets/img/profile/' . $profile_image . '" alt="Avatar" style="max-width: 150px;" class="rounded-circle">
-                        <h5>' . $nama_pengguna . '</h5>
-                        <div>
-                            <button class="btn btn-warning btn-edit" data-id="' . $id_komentar . '" data-isi="' . $isi_komentar . '">Edit</button>
-                            <button class="btn btn-danger btn-hapus" data-id="' . $id_komentar . '">Hapus</button>
-                        </div>
-                    </div>
-                    <div class="text-center">
-                        <h5 style="word-wrap: break-word;">' . $isi_komentar . '</h5>
-                        <h6>Waktu: ' . $tanggal_komentar . '</h6>
-                    </div>
+                // Tambahkan class 'comment-reply' jika ini reply
+                $commentClass = is_null($parent_id) ? 'comment' : 'comment comment-reply';
+
+                echo '<div id="comment-' . $id . '" class="' . $commentClass . '">';
+                echo '<div class="comment-body d-flex mb-4">';
+                echo '<div class="comment-img me-3">';
+                echo '<img src="../assets/img/profile/' . $foto . '" alt="" class="rounded-circle" style="width: 60px; height: 60px; object-fit: cover;">';
+                echo '</div>';
+                echo '<div>';
+                echo '<div class="d-flex align-items-center gap-2">';
+                echo '<h5 class="fw-bold mb-0">' . $nama . '</h5>';
+                echo '<a href="#" class="reply reply-button text-primary small" data-id="' . $id . '"><i class="bi bi-reply-fill"></i> Balas</a>';
+                echo '</div>';
+                echo '<time class="text-muted" datetime="' . $tanggal . '">' . $tanggal . '</time>';
+                echo '<p class="mt-2">' . $isi . '</p>';
+                echo '</div></div>';
+                echo '</div>';
+                
+                tampilkanKomentar($koneksi, $id_buku, $id);
+            }
+        }
+
+        ?>
+
+        <!-- Bagian Komentar -->
+        <section id="blog-comments" class="blog-comments section py-5">
+            <div class="container">
+                <h4 class="comments-count mb-4">Komentar Pembaca</h4>
+
+                <?php
+                if (isset($_GET['id_buku']) && is_numeric($_GET['id_buku'])) {
+                    $id_buku = $_GET['id_buku'];
+                    tampilkanKomentar($koneksi, $id_buku);
+                } else {
+                    echo "<p>ID buku tidak valid.</p>";
+                }
+                ?>
+
+        <!-- Form komentar -->
+        <section id="comment-form" class="comment-form section">
+        <div class="container">
+
+            <form action="tambah_komentar.php" method="POST">
+            <h4>Komentar Anda</h4>
+            <input type="hidden" name="id_buku" value="<?php echo $id_buku; ?>">
+            <input type="hidden" name="parent_id" id="parent_id" value="">
+
+            <div id="reply-info" class="alert alert-info mb-3 d-none"></div>
+
+            <div class="row">
+                <div class="col form-group">
+                <textarea name="isi_komentar" class="form-control" id="isi_komentar" placeholder="Tulis komentar Anda*" required></textarea>
                 </div>
-            </div><!-- End testimonial item -->';
-                                }
-                            } else {
-                                echo "<div class='swiper-slide'><div class='testimonial-item'><p class='text-center'>There are no comments for this book yet.</p></div></div>";
-                            }
-                        } else {
-                            echo "<div class='swiper-slide'><div class='testimonial-item'><p class='text-center'>ID buku tidak valid.</p></div></div>";
-                        }
-                        ?>
-                    </div>
-                    <div class="swiper-pagination"></div>
-                </div>
-
-                <!-- Formulir untuk menulis komentar -->
-                <?php if (isset($_SESSION['id_pengguna'])) : ?>
-                    <form id="comment-form" method="post" action="tambah_komentar.php">
-                        <input type="hidden" name="id_buku" value="<?php echo htmlspecialchars($id_buku); ?>">
-                        <div class="form-group">
-                            <label for="isi_komentar">Tulis komentar:</label>
-                            <textarea id="isi_komentar" name="isi_komentar" class="form-control" rows="4" required></textarea>
-                        </div><br>
-                        <button type="submit" class="btn btn-primary">Kirim Komentar</button>
-                    </form>
-                <?php else : ?>
-                    <p>Silakan <a href="login.php">login</a> untuk menulis komentar.</p>
-                <?php endif; ?>
             </div>
-        </section> <!-- End Tempat Komentar untuk Buku -->
 
+            <div class="text-center mt-3">
+                <button type="submit" class="btn btn-primary">Kirim Komentar</button>
+            </div>
+            </form>
+
+        </div>
+        </section>
+
+            </div>
+        </section>
+
+        <script>
+            document.addEventListener("DOMContentLoaded", function () {
+                document.querySelectorAll('.reply-button').forEach(button => {
+                    button.addEventListener('click', function (e) {
+                        e.preventDefault();
+
+                        const komentarId = this.dataset.id;
+                        const namaPengguna = this.closest('.comment-body').querySelector('h5').textContent;
+                        const textarea = document.getElementById('isi_komentar');
+
+                        textarea.value = `@${namaPengguna.trim()} `;
+                        document.getElementById('parent_id').value = komentarId;
+                        textarea.focus();
+
+                        
+                    });
+                });
+
+                const form = document.querySelector('form');
+                if (form) {
+                    form.addEventListener('submit', function (e) {
+                        e.preventDefault(); 
+
+                        const formData = new FormData(this);
+
+                        fetch('tambah_komentar.php', {
+                            method: 'POST',
+                            body: formData
+                        })
+                        .then(response => response.text())
+                        .then(data => {
+                            form.reset();
+                            document.getElementById('parent_id').value = '';
+                            const replyInfo = document.getElementById('reply-info');
+                            if (replyInfo) replyInfo.classList.add('d-none');
+
+                            location.reload(); 
+                        })
+                        .catch(error => {
+                            console.error('Terjadi kesalahan:', error);
+                        });
+                    });
+                }
+            });
+        </script>
+
+        <style>
+            .comment {
+            margin-bottom: 15px;
+        }
+
+        .comment-body {
+            display: flex;
+            align-items: flex-start;
+        }
+
+        .comment-img {
+            margin-right: 15px;
+        }
+
+        .comment-reply {
+            margin-left: 60px;
+        }
+
+        .reply-button {
+            text-decoration: none;
+            font-size: 0.9rem;
+            margin-left: 10px;
+        }
+
+        </style>
 
         <!-- Modal Edit Komentar -->
         <div class="modal fade" id="editKomentarModal" tabindex="-1" aria-labelledby="editKomentarModalLabel" aria-hidden="true">
